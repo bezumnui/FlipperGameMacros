@@ -1,0 +1,8 @@
+App(
+    appid="game_macros",
+    name="Game Macros",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="game_macros_main",
+    fap_icon="icon.png",
+    fap_category="bezik",
+)
