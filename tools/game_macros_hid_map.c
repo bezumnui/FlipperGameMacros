@@ -1,6 +1,7 @@
 #include "game_macros_hid_map.h"
 
-#define GAME_MACROS_HID_PAIRS_LEN sizeof (game_macros_hid_pairs) / sizeof (GameMacrosMap)
+#define GAME_MACROS_HID_PAIRS_LEN sizeof(game_macros_hid_pairs) / sizeof(GameMacrosMap)
+
 
 GameMacrosMap game_macros_hid_pairs[] = {
     {.key = "a", .value = HID_KEYBOARD_A},
@@ -85,7 +86,6 @@ GameMacrosMap game_macros_hid_pairs[] = {
     {.key = "nonus_backslash", .value = HID_KEYBOARD_NONUS_BACKSLASH},
     {.key = "application", .value = HID_KEYBOARD_APPLICATION},
     {.key = "power", .value = HID_KEYBOARD_POWER},
-    {.key = "keypad_equal", .value = HID_KEYPAD_EQUAL},
     {.key = "f13", .value = HID_KEYBOARD_F13},
     {.key = "f14", .value = HID_KEYBOARD_F14},
     {.key = "f15", .value = HID_KEYBOARD_F15},
@@ -115,8 +115,6 @@ GameMacrosMap game_macros_hid_pairs[] = {
     {.key = "lock_caps_lock", .value = HID_KEYBOARD_LOCK_CAPS_LOCK},
     {.key = "lock_num_lock", .value = HID_KEYBOARD_LOCK_NUM_LOCK},
     {.key = "lock_scroll_lock", .value = HID_KEYBOARD_LOCK_SCROLL_LOCK},
-    {.key = "keypad_comma", .value = HID_KEYPAD_COMMA},
-    {.key = "keypad_equal_sign", .value = HID_KEYPAD_EQUAL_SIGN},
     {.key = "keyboard_international_1", .value = HID_KEYBOARD_INTERNATIONAL_1},
     {.key = "keyboard_international_2", .value = HID_KEYBOARD_INTERNATIONAL_2},
     {.key = "keyboard_international_3", .value = HID_KEYBOARD_INTERNATIONAL_3},
@@ -155,22 +153,54 @@ GameMacrosMap game_macros_hid_pairs[] = {
     {.key = "r_shift", .value = HID_KEYBOARD_R_SHIFT},
     {.key = "r_alt", .value = HID_KEYBOARD_R_ALT},
     {.key = "r_gui", .value = HID_KEYBOARD_R_GUI}
-    };
+};
     
+
+bool game_macros_compare_strings(const char* str1, const char* str2) {
+
+    while (*str1 != '\0') {
+        if (*str1 == ' ' || *str1 == '\n' || *str2 == ' ' || *str2 == '\n') {
+            break;
+        }
+        if (*str2 == '\0') {
+            return false;
+        }
+        if (*str1 != *str2) {
+            return false;
+        }
+        str1++;
+        str2++;
+    }
+    if (*str2 == '\0') return true;
+    return false;
+}
+
+void game_macros_get_cut_string(char** str, size_t size) {
+    for (size_t i = 0; i < size; i++)
+    {
+        if ((*str)[i] == '\n' || (*str)[i] == ' ') {
+            (*str)[i] = '\0';
+        }
+    }
+    
+}
+
 uint16_t game_macros_get_hid_pair(const char* key) {
-    UNUSED(key);
-    FuriString* pair_key = furi_string_alloc();
-    FuriString* fkey = furi_string_alloc();
+    FURI_LOG_I("GMS", "get hid pair");
+    FuriString* strdbg = furi_string_alloc();
     for(size_t i = 0; i < GAME_MACROS_HID_PAIRS_LEN; i++) {
         GameMacrosMap pair = game_macros_hid_pairs[i];
-        
-        furi_string_set(pair_key, pair.key);
-        furi_string_set(fkey, key);
-        if (furi_string_cmp(pair_key, fkey) == 0) return pair.value;
+        furi_string_printf(strdbg, "%.10s: %s", key, pair.key);
+        if (game_macros_compare_strings(key, pair.key) != false) {
+            furi_string_free(strdbg);
+            return pair.value;
+        };
     }
+    furi_string_free(strdbg);
     return 0;
 }
-uint32_t game_macros_parse_number(const char* key) {
+size_t game_macros_parse_number(const char* key) {
+    FURI_LOG_I("GMS", "parse number");
     if (*key >= '0' && *key <= '9') {
         return game_macros_string_to_int(key);
     }
@@ -185,12 +215,13 @@ size_t game_macros_string_to_int(const char* key) {
             number = number * 10 + (cur_char - '0');
         } else {
             if (cur_char == 's') {
-                number = number * 100;
-            } else if (cur_char == 's') {
-                number = number * 6000;
+                number = number * 1000;
+            } else if (cur_char == 'm') {
+                number = number * 60000;
             }
             break;
         }
     }
+    FURI_LOG_I("GMH", "number: %d", number);
     return number;
 }

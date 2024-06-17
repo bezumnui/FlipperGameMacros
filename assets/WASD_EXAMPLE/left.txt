@@ -1,0 +1,7 @@
+!a  ; on press
+==
+^a  ; on release
+==
+    ; on hold
+==
+    ; on short

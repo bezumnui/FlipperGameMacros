@@ -1,0 +1,10 @@
+
+!spacebar ; on press
+==
+^spacebar ; on release
+==
+    ; on hold
+== 
+    ; on long
+ 
+

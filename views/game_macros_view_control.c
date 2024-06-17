@@ -3,6 +3,8 @@
 View* game_macros_view_control_get_view(GameMacrosViewControl* model) {
     return model->view;
 }
+
+
 static void game_macros_view_draw_arrow(Canvas* canvas, uint8_t x, uint8_t y, CanvasDirection dir) {
     canvas_draw_triangle(canvas, x, y, 5, 3, dir);
     if(dir == CanvasDirectionBottomToTop) {
@@ -15,6 +17,25 @@ static void game_macros_view_draw_arrow(Canvas* canvas, uint8_t x, uint8_t y, Ca
         canvas_draw_line(canvas, x - 6, y, x + 1, y);
     }
 }
+void game_macros_view_control_free(GameMacrosViewControl* control) {
+    FURI_LOG_I("GMS", "control free");
+    
+    with_view_model(
+        control->view,
+        GameMacrosViewControlModel * model,
+        {
+            game_macros_view_control_thread_free(model);
+            furi_string_free(model->debug_string);
+            free(model->map);
+        },
+        true
+    );
+    view_free(control->view);
+    free(control);
+    FURI_LOG_I("GMS", "control released");
+
+}
+
 
 static void game_macros_view_control_draw(Canvas* canvas, void* model_raw) {
     UNUSED(canvas);
@@ -88,12 +109,97 @@ static void game_macros_view_control_draw(Canvas* canvas, void* model_raw) {
 
 }
 void game_macros_keyboard_process(uint16_t button, bool press) {
+    FURI_LOG_I("GMS", "Keyboard process");
+    furi_hal_hid_kb_release(button);
     if (press) {
         furi_hal_hid_kb_press(button);
-    } else {
-        furi_hal_hid_kb_release(button);
-    }
+    } 
 }
+
+
+
+int32_t game_macros_view_control_input_play(void *context) {
+    FURI_LOG_I("GMS", "Input play");
+    GameMacrosControlThreadCtx* ctx = context;
+    GameMacrosScriptInstuction *instruction;
+    ctx->set->is_playing = true;
+    for (size_t i = 0; i < ctx->count; i++)
+    {
+        instruction = ctx->instructions + i;
+            FURI_LOG_I("GMS", "Instruction load... %d", instruction->delay_ms);
+
+        if (instruction->delay) {
+            FURI_LOG_I("GMS", "Sleep %d", instruction->delay_ms);
+            if (furi_thread_flags_wait(GameMacrosThreadTerminate, FuriFlagWaitAny, instruction->delay_ms) & GameMacrosThreadTerminate) {
+                return 0;
+        
+            } 
+            continue;
+        }
+        game_macros_keyboard_process(instruction->key.hid_key, instruction->key.press);
+    }
+    ctx->set->is_playing = false;
+    return 0;
+}
+
+void game_macros_view_control_input_process(InputEvent* event, GameMacrosViewControlModel *model) {
+    FURI_LOG_I("GMS", "Input process");
+    GameMacrosScriptInstuctionSet *set = NULL;
+    GameMacrosScriptMapping *map = model->map;
+    GameMacrosScriptInstuction *instructions = NULL;
+    GameMacrosControlThreadCtx* thread_ctx = NULL;
+
+    GameMacrosViewThreads *threads = &model->threads;
+    size_t count;
+    furi_check(map);
+    if (event->key == InputKeyBack) {
+        set = &map->back;
+        thread_ctx = &threads->thread_back; 
+    } else if (event->key == InputKeyOk) {
+        set = &map->ok;
+        thread_ctx = &threads->thread_ok; 
+    } else if (event->key == InputKeyUp) {
+        set = &map->up;
+        thread_ctx = &threads->thread_up; 
+    } else if (event->key == InputKeyDown) {
+        set = &map->down;
+        thread_ctx = &threads->thread_down; 
+    } else if (event->key == InputKeyLeft) {
+        set = &map->left;
+        thread_ctx = &threads->thread_left; 
+    } else if (event->key == InputKeyRight) {
+        set = &map->right;
+        thread_ctx = &threads->thread_right;
+    }
+          
+    furi_check(set);
+    if (set->is_playing) return;
+
+    if (event->type == InputTypeLong) {
+        if (set->on_hold_size == 0) return;
+        instructions = set->on_hold;
+        count = set->on_hold_size;
+    } else if (event->type == InputTypeShort) {
+        if (set->on_short_size == 0) return;
+        instructions = set->on_short;
+        count = set->on_short_size;
+    } else if (event->type == InputTypeRelease) {
+        if (set->on_release_size == 0) return;
+        instructions = set->on_release;
+        count = set->on_release_size;
+    } else if (event->type == InputTypePress) {
+        if (set->on_press_size == 0) return;
+        instructions = set->on_press;
+        count = set->on_press_size;
+    } else return;
+
+    thread_ctx->count = count;
+    thread_ctx->instructions = instructions;
+    thread_ctx->set = set;
+    furi_thread_start(thread_ctx->thread);
+}
+
+
 
 static bool game_macros_view_control_input(InputEvent* event, void* context) {
     
@@ -103,28 +209,20 @@ static bool game_macros_view_control_input(InputEvent* event, void* context) {
         control->view,
         GameMacrosViewControlModel * model,
         {   
+            game_macros_view_control_input_process(event, model);
             if (event->type == InputTypePress || event->type == InputTypeRelease) {
                 bool value = event->type == InputTypePress;
                 if (event->key == InputKeyBack) {
-                    game_macros_keyboard_process(HID_KEYBOARD_E, value);
-
                     model->back_pressed = value;
                 } else if (event->key == InputKeyOk) {
-                    game_macros_keyboard_process(HID_KEYBOARD_SPACEBAR, value);
                     model->ok_pressed = value;
                 } else if (event->key == InputKeyUp) {
-                    game_macros_keyboard_process(HID_KEYBOARD_W, value);
                     model->up_pressed = value;
                 } else if (event->key == InputKeyDown) {
-                    game_macros_keyboard_process(HID_KEYBOARD_S, value);
                     model->down_pressed = value;
                 } else if (event->key == InputKeyLeft) {
-                    game_macros_keyboard_process(HID_KEYBOARD_A, value);
-
                     model->left_pressed = value;
                 } else if (event->key == InputKeyRight) {
-                    game_macros_keyboard_process(HID_KEYBOARD_D, value);
-
                     model->right_pressed = value;
                 }
                     
@@ -138,7 +236,76 @@ static bool game_macros_view_control_input(InputEvent* event, void* context) {
     }
     return true;
 }
+void game_macros_view_control_set_map(GameMacrosViewControl* control, GameMacrosScriptMapping* map) {
+    with_view_model(
+        control->view,
+        GameMacrosViewControlModel * model,
+        {
+            if (model->map != 0) {
+                free(model->map);
+            }
+            model->map = map;
+            
+        },
+        true
+    );
+}
+
+void game_macros_view_control_init_thread(const char* name, size_t stack_size, GameMacrosControlThreadCtx* ctx) {
+    ctx->thread = furi_thread_alloc();
+    furi_thread_set_name(ctx->thread, name);
+    furi_thread_set_stack_size(ctx->thread, stack_size);
+    furi_thread_set_context(ctx->thread, ctx);
+    furi_thread_set_callback(ctx->thread, game_macros_view_control_input_play);
+
+}
+
+
+
+void game_macros_view_control_thread_free(GameMacrosViewControlModel *model) {
+    FURI_LOG_I("GMS", "threads free");
+    furi_check(model);
+    FURI_LOG_I("GMS", "threads: control checked");
+
+    FuriThread* threads[] = {
+        model->threads.thread_up.thread,
+        model->threads.thread_down.thread,
+        model->threads.thread_left.thread,
+        model->threads.thread_right.thread,
+        model->threads.thread_ok.thread,
+        model->threads.thread_back.thread
+    };
+    
+    #define THREADS_ITTERATION (size_t i = 0; i < sizeof (threads) / sizeof (FuriThread*); i++)
+    
+    FURI_LOG_I("GMS", "threads flag setting");
+    for THREADS_ITTERATION
+    {
+        furi_thread_flags_set(furi_thread_get_id(threads[i]), GameMacrosThreadTerminate);
+    }
+
+    FURI_LOG_I("GMS", "threads joining");
+    for THREADS_ITTERATION
+    {
+        furi_thread_join(threads[i]);
+    }
+
+    FURI_LOG_I("GMS", "threads releasing");
+    for THREADS_ITTERATION
+    {
+        furi_thread_free(threads[i]);
+    }
+    #undef THREADS_ITTERATION
+
+    FURI_LOG_I("GMS", "threads work done");
+    
+}
+
+
+// ViewDispatcherMessageTypeStop
 GameMacrosViewControl* game_macros_view_control_alloc() {
+    FURI_LOG_I("GMS", "view control alloc");
+
     GameMacrosViewControl* control = malloc(sizeof (GameMacrosViewControl));
     control->view = view_alloc();
     view_allocate_model(control->view, ViewModelTypeLocking, sizeof (GameMacrosViewControlModel));
@@ -148,15 +315,26 @@ GameMacrosViewControl* game_macros_view_control_alloc() {
     view_set_orientation(control->view, ViewOrientationVertical);
     
 
+    // GameMacrosViewThreads *threads;
     with_view_model(
         control->view,
         GameMacrosViewControlModel * model,
         {
+            game_macros_view_control_init_thread("GMA_up", 1024, &model->threads.thread_up);
+            game_macros_view_control_init_thread("GMA_down", 1024, &model->threads.thread_down);
+            game_macros_view_control_init_thread("GMA_left", 1024, &model->threads.thread_left);
+            game_macros_view_control_init_thread("GMA_right", 1024, &model->threads.thread_right);
+            game_macros_view_control_init_thread("GMA_ok", 1024, &model->threads.thread_ok);
+            game_macros_view_control_init_thread("GMA_back", 1024, &model->threads.thread_back);
+
+            
             model->debug_string = furi_string_alloc();
             furi_string_set(model->debug_string, "Hold to exit");
         },
         true
     );
+
+   
     return control;
 }
 

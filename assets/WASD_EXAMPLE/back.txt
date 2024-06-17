@@ -1,0 +1,12 @@
+    ; on press
+==
+    ; on release
+==
+    ; on hold (Is not for use. leave it empty)
+==
+!w   ; on short
+500  ; 500 ms delay
+^w
+!s
+1s   ; 1s delay
+^s
