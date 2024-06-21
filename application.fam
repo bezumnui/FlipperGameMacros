@@ -1,11 +1,26 @@
 App(
-    appid="game_macros",
-    fap_version="0.1"
+    appid="game_macros_ble",
+    fap_version="0.1",
     name="Game Macros",
     apptype=FlipperAppType.EXTERNAL,
-    entry_point="game_macros_main",
+    entry_point="game_macros_usb_main",
+    fap_icon="icon.png",
+    cdefines=["GAME_MACROS_BLE"],
+    fap_libs=["ble_profile"],
+    fap_category="Bluetooth",
+    fap_file_assets="assets",
+    stack_size=16 * 1024,
+)
+
+App(
+    appid="game_macros",
+    fap_version="0.1",
+    name="Game Macros",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="game_macros_usb_main",
     fap_icon="icon.png",
     fap_category="USB",
     fap_file_assets="assets",
-    stack_size=8 * 1024,
+    stack_size=16 * 1024,
 )
+

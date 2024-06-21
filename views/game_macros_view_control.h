@@ -4,12 +4,20 @@
 #include <furi_hal_usb.h>
 #include <furi_hal_usb_hid.h>
 #include <storage/storage.h>
+
+#include <bt/bt_service/bt.h>
+#include <furi_hal_bt.h>
+#include <extra_profiles/hid_profile.h>
+#include <notification/notification_messages.h>
+
 #include <gui/view.h>
 #include <gui/elements.h>
 #include <gui/view_dispatcher.h>
 #include <input/input.h>
 #include "icons/hid_icons.h"
 #include "tools/game_macros_hid_map.h"
+
+
 
 
 typedef struct {
@@ -69,7 +77,7 @@ typedef struct
     GameMacrosScriptInstuction* instructions;
     FuriThread* thread;
     size_t count;
-
+    NotificationApp* notifications;
     
 } GameMacrosControlThreadCtx;
 
@@ -87,6 +95,7 @@ typedef struct
 {
     FuriString* debug_string;
     GameMacrosScriptMapping* map;
+    NotificationApp* notifications;
     bool up_pressed;
     bool down_pressed;
     bool left_pressed;
@@ -102,9 +111,13 @@ typedef enum
     GameMacrosThreadTerminate = 1
 } GameMacrosThreadFlags;
 
+
 void game_macros_view_control_thread_free(GameMacrosViewControlModel *model);
 void game_macros_view_control_set_map(GameMacrosViewControl* control, GameMacrosScriptMapping* map);
 View* game_macros_view_control_get_view(GameMacrosViewControl* model);
-GameMacrosViewControl* game_macros_view_control_alloc();
+GameMacrosViewControl* game_macros_view_control_alloc(GameMacrosScriptMapping* mapping);
 void game_macros_view_control_free(GameMacrosViewControl* control);
+void game_macros_view_control_reset(GameMacrosViewControl* control);
+
+extern FuriHalBleProfileBase* game_macros_view_ble_profile;
 

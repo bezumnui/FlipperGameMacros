@@ -1,8 +1,24 @@
 #include "game_macros_view_control.h"
 
+
+FuriHalBleProfileBase* game_macros_view_ble_profile = NULL;
+
 View* game_macros_view_control_get_view(GameMacrosViewControl* model) {
     return model->view;
 }
+
+static const NotificationSequence blink_test_sequence_hw_blink_blue = {
+    &message_blink_start_10,
+    &message_blink_set_color_blue,
+    &message_do_not_reset,
+    NULL,
+};
+
+
+static const NotificationSequence blink_test_sequence_hw_blink_stop = {
+    &message_blink_stop,
+    NULL,
+};
 
 
 static void game_macros_view_draw_arrow(Canvas* canvas, uint8_t x, uint8_t y, CanvasDirection dir) {
@@ -26,9 +42,8 @@ void game_macros_view_control_free(GameMacrosViewControl* control) {
         {
             game_macros_view_control_thread_free(model);
             furi_string_free(model->debug_string);
-            free(model->map);
         },
-        true
+        false
     );
     view_free(control->view);
     free(control);
@@ -41,7 +56,7 @@ static void game_macros_view_control_draw(Canvas* canvas, void* model_raw) {
     UNUSED(canvas);
     UNUSED(model_raw);
     GameMacrosViewControlModel * model = model_raw;
-
+    
     // that part is using form the hid_keynote.c
     elements_multiline_text_aligned(canvas, 15, 8, AlignLeft, AlignTop, furi_string_get_cstr(model->debug_string));
 
@@ -109,11 +124,20 @@ static void game_macros_view_control_draw(Canvas* canvas, void* model_raw) {
 
 }
 void game_macros_keyboard_process(uint16_t button, bool press) {
-    FURI_LOG_I("GMS", "Keyboard process");
-    furi_hal_hid_kb_release(button);
-    if (press) {
-        furi_hal_hid_kb_press(button);
-    } 
+    
+    #ifdef GAME_MACROS_BLE
+        FURI_LOG_I("GMS", "Keyboard process BLE");
+        ble_profile_hid_kb_release(game_macros_view_ble_profile, button);
+        if (press) {
+            ble_profile_hid_kb_press(game_macros_view_ble_profile, button);
+        } 
+    #else
+        FURI_LOG_I("GMS", "Keyboard process");
+        furi_hal_hid_kb_release(button);
+        if (press) {
+            furi_hal_hid_kb_press(button);
+        } 
+    #endif
 }
 
 
@@ -136,6 +160,13 @@ int32_t game_macros_view_control_input_play(void *context) {
             } 
             continue;
         }
+        UNUSED(blink_test_sequence_hw_blink_blue);
+        if (instruction->key.press) {
+            notification_message(ctx->notifications, &blink_test_sequence_hw_blink_blue);
+        } else {
+            notification_message(ctx->notifications, &blink_test_sequence_hw_blink_stop);
+        }
+        
         game_macros_keyboard_process(instruction->key.hid_key, instruction->key.press);
     }
     ctx->set->is_playing = false;
@@ -196,6 +227,7 @@ void game_macros_view_control_input_process(InputEvent* event, GameMacrosViewCon
     thread_ctx->count = count;
     thread_ctx->instructions = instructions;
     thread_ctx->set = set;
+    FURI_LOG_I("GMS", "Thread start");
     furi_thread_start(thread_ctx->thread);
 }
 
@@ -205,6 +237,10 @@ static bool game_macros_view_control_input(InputEvent* event, void* context) {
     
     
     GameMacrosViewControl* control = context;
+    if (event->type == InputTypeLong && event->key == InputKeyBack) {
+        furi_hal_hid_kb_release_all();
+        return false;
+    }
     with_view_model(
         control->view,
         GameMacrosViewControlModel * model,
@@ -230,28 +266,13 @@ static bool game_macros_view_control_input(InputEvent* event, void* context) {
         },
         true
     );
-    if (event->type == InputTypeLong && event->key == InputKeyBack) {
-        furi_hal_hid_kb_release_all();
-        return false;
-    }
+
+    FURI_LOG_I("GMS", "INPUT processed: true");
     return true;
 }
-void game_macros_view_control_set_map(GameMacrosViewControl* control, GameMacrosScriptMapping* map) {
-    with_view_model(
-        control->view,
-        GameMacrosViewControlModel * model,
-        {
-            if (model->map != 0) {
-                free(model->map);
-            }
-            model->map = map;
-            
-        },
-        true
-    );
-}
 
-void game_macros_view_control_init_thread(const char* name, size_t stack_size, GameMacrosControlThreadCtx* ctx) {
+
+void game_macros_view_control_thread_alloc(const char* name, size_t stack_size, GameMacrosControlThreadCtx* ctx) {
     ctx->thread = furi_thread_alloc();
     furi_thread_set_name(ctx->thread, name);
     furi_thread_set_stack_size(ctx->thread, stack_size);
@@ -266,7 +287,8 @@ void game_macros_view_control_thread_free(GameMacrosViewControlModel *model) {
     FURI_LOG_I("GMS", "threads free");
     furi_check(model);
     FURI_LOG_I("GMS", "threads: control checked");
-
+    furi_record_close(RECORD_NOTIFICATION);   
+    
     FuriThread* threads[] = {
         model->threads.thread_up.thread,
         model->threads.thread_down.thread,
@@ -275,7 +297,6 @@ void game_macros_view_control_thread_free(GameMacrosViewControlModel *model) {
         model->threads.thread_ok.thread,
         model->threads.thread_back.thread
     };
-    
     #define THREADS_ITTERATION (size_t i = 0; i < sizeof (threads) / sizeof (FuriThread*); i++)
     
     FURI_LOG_I("GMS", "threads flag setting");
@@ -301,9 +322,18 @@ void game_macros_view_control_thread_free(GameMacrosViewControlModel *model) {
     
 }
 
-
+void game_macros_view_control_reset(GameMacrosViewControl* control) {
+    with_view_model(
+        control->view,
+        GameMacrosViewControlModel * model,
+        {
+            memset(model->map, 0, sizeof (GameMacrosScriptMapping));
+        },
+        true
+    )
+}
 // ViewDispatcherMessageTypeStop
-GameMacrosViewControl* game_macros_view_control_alloc() {
+GameMacrosViewControl* game_macros_view_control_alloc(GameMacrosScriptMapping* mapping) {
     FURI_LOG_I("GMS", "view control alloc");
 
     GameMacrosViewControl* control = malloc(sizeof (GameMacrosViewControl));
@@ -312,20 +342,27 @@ GameMacrosViewControl* game_macros_view_control_alloc() {
     view_set_draw_callback(control->view, game_macros_view_control_draw);
     view_set_input_callback(control->view, game_macros_view_control_input);
     view_set_context(control->view, control);
-    view_set_orientation(control->view, ViewOrientationVertical);
-    
-
-    // GameMacrosViewThreads *threads;
+    view_set_orientation(control->view, ViewOrientationVertical);   
     with_view_model(
         control->view,
         GameMacrosViewControlModel * model,
         {
-            game_macros_view_control_init_thread("GMA_up", 1024, &model->threads.thread_up);
-            game_macros_view_control_init_thread("GMA_down", 1024, &model->threads.thread_down);
-            game_macros_view_control_init_thread("GMA_left", 1024, &model->threads.thread_left);
-            game_macros_view_control_init_thread("GMA_right", 1024, &model->threads.thread_right);
-            game_macros_view_control_init_thread("GMA_ok", 1024, &model->threads.thread_ok);
-            game_macros_view_control_init_thread("GMA_back", 1024, &model->threads.thread_back);
+            model->map = mapping;
+            model->notifications = furi_record_open(RECORD_NOTIFICATION);
+
+            model->threads.thread_up.notifications = model->notifications;
+            model->threads.thread_down.notifications = model->notifications;
+            model->threads.thread_left.notifications = model->notifications;
+            model->threads.thread_right.notifications = model->notifications;
+            model->threads.thread_ok.notifications = model->notifications;
+            model->threads.thread_back.notifications = model->notifications;
+
+            game_macros_view_control_thread_alloc("GMA_up", 1024, &model->threads.thread_up);
+            game_macros_view_control_thread_alloc("GMA_down", 1024, &model->threads.thread_down);
+            game_macros_view_control_thread_alloc("GMA_left", 1024, &model->threads.thread_left);
+            game_macros_view_control_thread_alloc("GMA_right", 1024, &model->threads.thread_right);
+            game_macros_view_control_thread_alloc("GMA_ok", 1024, &model->threads.thread_ok);
+            game_macros_view_control_thread_alloc("GMA_back", 1024, &model->threads.thread_back);
 
             
             model->debug_string = furi_string_alloc();
@@ -333,8 +370,6 @@ GameMacrosViewControl* game_macros_view_control_alloc() {
         },
         true
     );
-
-   
     return control;
 }
 

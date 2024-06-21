@@ -1,15 +1,20 @@
 #include "game_macros_scenes.h"
 #include "game_macros_scene_main.h"
+#include "game_macros_scene_menu.h"
 
 AppSceneOnEnterCallback game_macros_main_on_enter_handlers[] = {
     game_macros_main_scene_enter,
+    game_macros_menu_scene_enter
 };
 
 AppSceneOnEventCallback game_macros_main_on_event_handlers[] = {
     game_macros_main_scene_event,
+    game_macros_menu_scene_event
+
 };
 AppSceneOnExitCallback game_macros_main_on_exit_handlers[] = {
     game_macros_main_scene_exit,
+    game_macros_menu_scene_exit
 };
 
 

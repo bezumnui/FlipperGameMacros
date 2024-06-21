@@ -187,16 +187,12 @@ void game_macros_get_cut_string(char** str, size_t size) {
 
 uint16_t game_macros_get_hid_pair(const char* key) {
     FURI_LOG_I("GMS", "get hid pair");
-    FuriString* strdbg = furi_string_alloc();
     for(size_t i = 0; i < GAME_MACROS_HID_PAIRS_LEN; i++) {
         GameMacrosMap pair = game_macros_hid_pairs[i];
-        furi_string_printf(strdbg, "%.10s: %s", key, pair.key);
         if (game_macros_compare_strings(key, pair.key) != false) {
-            furi_string_free(strdbg);
             return pair.value;
         };
     }
-    furi_string_free(strdbg);
     return 0;
 }
 size_t game_macros_parse_number(const char* key) {

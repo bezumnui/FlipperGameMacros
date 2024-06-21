@@ -128,18 +128,25 @@ void game_macros_script_read_file(File* file, const char* path, GameMacrosScript
     storage_file_close(file);
 }
 
-void game_macros_script_parcer(void* context, uint32_t index) {
-    UNUSED(index);
-    FURI_LOG_I("GMS", "Script parcer");
-    GameMacrosScriptContext* ctx = context;
-    ctx->ctx->map = malloc(sizeof(GameMacrosScriptMapping));
-    GameMacrosScriptMapping* map = ctx->ctx->map;
 
+
+GameMacrosScriptMapping* game_macros_script_mapping_alloc() {
+    GameMacrosScriptMapping* p = malloc(sizeof(GameMacrosScriptMapping));
+    memset(p, 0, sizeof (GameMacrosScriptMapping));
+    return p;
+}
+
+void game_macros_script_mapping_free(GameMacrosScriptMapping* mapping) {
+    free(mapping);
+}
+
+void game_macros_script_parcer(const char* path, GameMacrosScriptMapping *map) {
+    FURI_LOG_I("GMS", "Script parcer");
+ 
     Storage* storage = furi_record_open(RECORD_STORAGE);
     File* file = storage_file_alloc(storage);
     FuriString* file_path = furi_string_alloc();
     FURI_LOG_I("GMS", "Script parcer, got the file path");
-    const char* path = furi_string_get_cstr(ctx->path);
 
     furi_string_printf(file_path, "%s/%s", path, "back.txt");
     game_macros_script_read_file(file, furi_string_get_cstr(file_path), &map->back);
@@ -163,8 +170,5 @@ void game_macros_script_parcer(void* context, uint32_t index) {
     furi_string_free(file_path);
     storage_file_free(file);
     furi_record_close(RECORD_STORAGE);
-    game_macros_view_control_set_map(ctx->ctx->control, map);
-    FURI_LOG_I("GMS", "Script parcer, view_dispatcher_switch");
-    ctx->ctx->view_id = GameMacrosControlView;
-    view_dispatcher_switch_to_view(ctx->ctx->view_dispatcher, GameMacrosControlView);
+    // view_dispatcher_switch_to_view(ctx->ctx->view_dispatcher, GameMacrosControlView);
 }
