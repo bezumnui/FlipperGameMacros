@@ -12,9 +12,7 @@
 #include "scenes/game_macros_scenes.h"
 #include "views/game_macros_view_control.h"
 #include "tools/game_macros_script_parcer.h"
-
-
-// #define __GM_DEBUG__
+// #define __GфM_DEBUG__
 typedef enum { GameMacrosMenuView, GameMacrosControlView } GameMacorsViews;
 typedef enum {GameMacrosChoseControl, GameMacrosChoseExit} GameMacrosChoses;
 #define GAME_MACROS_APP_FOLDER EXT_PATH("game_macros")

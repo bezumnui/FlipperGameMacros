@@ -1,3 +1,4 @@
+
 App(
     appid="game_macros_ble",
     fap_version="0.1",
@@ -11,7 +12,7 @@ App(
     fap_file_assets="assets",
     stack_size=16 * 1024,
 )
-
+цфцццввцы
 App(
     appid="game_macros",
     fap_version="0.1",
@@ -23,4 +24,3 @@ App(
     fap_file_assets="assets",
     stack_size=16 * 1024,
 )
-

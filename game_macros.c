@@ -63,6 +63,7 @@ void game_macros_bt_enable(GameMacrosContext* app) {
     game_macros_view_ble_profile = app->profile;
 }
 
+
 void game_macros_bt_free(GameMacrosContext* app) {
     bt_disconnect(app->bt);
     // Wait 2nd core to update nvm storage
@@ -78,11 +79,7 @@ int32_t game_macros_usb_main(void* p) {
     GameMacrosContext* app = malloc(sizeof(GameMacrosContext)); // 110464 - 110104 (117768 - 117616)
 
     Gui* gui = furi_record_open(RECORD_GUI);
-    #ifdef GAME_MACROS_BLE
     
-        FURI_LOG_I("GMS", "Enabling BLE");
-        game_macros_bt_enable(app);
-    #endif
     // memmgr_get_free_heap();
     app->menu = submenu_alloc(); // 111152
 
@@ -104,15 +101,24 @@ int32_t game_macros_usb_main(void* p) {
     // scene_manager
     app->scene_manager = scene_manager_alloc(&game_macros_main_scene_handlers, app); // 59776
 
-    // load resources
+    // load resources  
     game_macros_load_resources(); // 59728
-    
-    // USB setup
+
+    // USB / BLE setup
+
     app->usb_mode_prev = furi_hal_usb_get_config();
-    furi_hal_usb_unlock();
-    #ifndef __GM_DEBUG__
-        furi_check(furi_hal_usb_set_config(&usb_hid, NULL) == true);
-    #endif // 59712
+    
+    #ifdef GAME_MACROS_BLE
+    
+        FURI_LOG_I("GMS", "Enabling BLE");
+        game_macros_bt_enable(app);
+    #else 
+        furi_hal_usb_unlock();
+        #ifndef __GM_DEBUG__
+            furi_check(furi_hal_usb_set_config(&usb_hid, NULL) == true);
+        #endif // 59712
+    #endif
+   
  
 
     // run
@@ -128,6 +134,7 @@ int32_t game_macros_usb_main(void* p) {
     
     FURI_LOG_I("GMS", "Application stop"); // 59760
     scene_manager_stop(app->scene_manager);
+    
     furi_hal_usb_set_config(app->usb_mode_prev, NULL); // (57528-56776) (57376-56712)  (752 ~ 664)
     
     furi_record_close(RECORD_GUI);
